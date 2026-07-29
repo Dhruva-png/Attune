@@ -8,6 +8,7 @@ import pytest
 from attune.vision.camera.mock_camera import blank_frame
 from attune.vision.face.model import MediaPipeFaceModel
 from attune.vision.hands.model import MediaPipeHandModel
+from attune.vision.objects.model import YOLOObjectModel
 from attune.vision.pose.model import MediaPipePoseModel
 
 # Reused across local runs so the ~17MB of model assets aren't re-downloaded every time.
@@ -25,8 +26,9 @@ MEASURED_FRAMES = 5
         lambda: MediaPipePoseModel(MODEL_DIR),
         lambda: MediaPipeFaceModel(MODEL_DIR),
         lambda: MediaPipeHandModel(MODEL_DIR),
+        lambda: YOLOObjectModel(MODEL_DIR),
     ],
-    ids=["pose", "face", "hand"],
+    ids=["pose", "face", "hand", "object"],
 )
 def test_inference_meets_latency_budget(model_factory: Callable[[], object]) -> None:
     model = model_factory()

@@ -38,6 +38,21 @@ cp .env.example .env
 pytest
 ```
 
+> **Windows:** `pip install -e ".[dev]"` can fail with `WinError 206: filename too long` while
+> installing PyTorch (an `ultralytics` dependency) unless
+> [long path support is enabled](https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation#enable-long-paths-in-windows-10-version-1607-and-later).
+> Workaround without changing system settings: install a CPU-only build first —
+> `pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cpu`
+> — then run the command above.
+
+The fast default `pytest` run covers unit tests only. Vision-model tests that need real model
+weights (downloaded on first use into gitignored `data/models/`) are marked `integration` /
+`performance` and run separately:
+
+```bash
+pytest -m "performance or integration"
+```
+
 See [the roadmap](docs/architecture/08-roadmap.md) for the milestone currently in progress.
 
 ## License
