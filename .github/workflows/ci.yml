@@ -33,3 +33,6 @@ jobs:
 
       - name: Test
         run: pytest
+
+      - name: Performance & integration tests
+        run: pytest -m "performance or integration" --no-cov

@@ -32,6 +32,8 @@ htmlcov/
 # ML model caches (downloaded at runtime, not vendored)
 *.onnx
 *.pt
+*.task
+*.task.part
 !attune/assets/**/*.onnx
 .cache/
 
