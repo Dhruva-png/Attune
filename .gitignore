@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Env / secrets
+.env
+*.local
+
+# Attune runtime data (never commit local DB, exports, or debug frames)
+/data/
+*.db
+*.db-journal
+attune.db
+/exports/
+/reports_generated/
+debug_frames/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ML model caches (downloaded at runtime, not vendored)
+*.onnx
+*.pt
+!attune/assets/**/*.onnx
+.cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Qt
+*.qmlc
+*.jsc
