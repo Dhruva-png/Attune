@@ -10,3 +10,10 @@ class Detection:
     label: str
     confidence: float
     bbox: BoundingBox
+
+
+@dataclass(frozen=True, slots=True)
+class TrackedDetection:
+    detection: Detection
+    track_id: int
+    frames_tracked: int

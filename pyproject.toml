@@ -137,10 +137,10 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Behaviour engines stay isolated from analytics/presentation"
+name = "Behaviour engines stay isolated from vision/analytics/presentation"
 type = "forbidden"
 source_modules = ["attune.behaviour"]
-forbidden_modules = ["attune.analytics", "attune.api", "attune.dashboard"]
+forbidden_modules = ["attune.vision", "attune.analytics", "attune.api", "attune.dashboard"]
 
 [[tool.importlinter.contracts]]
 name = "Dashboard never bypasses the API into infrastructure"

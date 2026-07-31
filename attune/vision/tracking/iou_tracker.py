@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from attune.core.value_objects.detection import Detection
+from attune.core.value_objects.detection import Detection, TrackedDetection
 from attune.core.value_objects.geometry import BoundingBox
-from attune.vision.tracking.types import TrackedDetection
 
 
 def iou(a: BoundingBox, b: BoundingBox) -> float:
