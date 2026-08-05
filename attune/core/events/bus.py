@@ -26,6 +26,9 @@ class EventBus:
     def unsubscribe(self, event_type: EventType, handler: EventHandler) -> None:
         self._handlers[event_type].remove(handler)
 
+    def unsubscribe_all(self, handler: EventHandler) -> None:
+        self._wildcard_handlers.remove(handler)
+
     async def publish(self, event: Event) -> None:
         handlers = [*self._handlers.get(event.type, []), *self._wildcard_handlers]
         if not handlers:

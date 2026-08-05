@@ -113,6 +113,21 @@ async def test_unsubscribe_stops_future_delivery() -> None:
 
 
 @pytest.mark.asyncio
+async def test_unsubscribe_all_stops_future_wildcard_delivery() -> None:
+    bus = EventBus()
+    received: list[Event] = []
+
+    async def handler(event: Event) -> None:
+        received.append(event)
+
+    bus.subscribe_all(handler)
+    bus.unsubscribe_all(handler)
+    await bus.publish(make_event(EventType.COFFEE_DRINK))
+
+    assert received == []
+
+
+@pytest.mark.asyncio
 async def test_publish_preserves_ordering_for_sequential_awaits() -> None:
     bus = EventBus()
     received: list[EventType] = []

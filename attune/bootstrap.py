@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy.ext.asyncio import AsyncEngine
+
 from attune.analytics.engine import AnalyticsEngine
 from attune.config.logging import configure_logging
 from attune.config.settings import Settings, get_settings
@@ -41,6 +43,7 @@ def bootstrap(settings: Settings | None = None) -> Container:
     container.register(IEventBus, event_bus)  # type: ignore[type-abstract]
 
     engine = create_engine(settings.database_url)
+    container.register(AsyncEngine, engine)
     session_factory = create_session_factory(engine)
 
     event_repository = SqlAlchemyEventRepository(session_factory)

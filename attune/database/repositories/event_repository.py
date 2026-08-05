@@ -56,8 +56,9 @@ class SqlAlchemyEventRepository:
         since: datetime | None = None,
         until: datetime | None = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[Event]:
-        stmt = select(EventModel).order_by(EventModel.timestamp).limit(limit)
+        stmt = select(EventModel).order_by(EventModel.timestamp).limit(limit).offset(offset)
         if session_id is not None:
             stmt = stmt.where(EventModel.session_id == str(session_id))
         if event_type is not None:

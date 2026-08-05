@@ -89,6 +89,11 @@ extend-exclude = ["attune/database/migrations/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "N"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's DI pattern requires calling Depends()/Query() etc. in argument
+# defaults — B008 exists to catch mutable-default bugs, not this idiom.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+
 [tool.mypy]
 python_version = "3.12"
 packages = ["attune"]
