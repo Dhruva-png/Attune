@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
+from attune.core.entities.analytics_snapshot import AnalyticsSnapshot, PeriodType
 from attune.core.entities.session import Session
 from attune.core.events.schema import Event, EventType
 
@@ -36,3 +37,15 @@ class ISettingsStore(Protocol):
     async def load(self) -> dict[str, object]: ...
 
     async def save(self, values: dict[str, object]) -> None: ...
+
+
+class IAnalyticsRepository(Protocol):
+    async def save(self, snapshot: AnalyticsSnapshot) -> None: ...
+
+    async def get(
+        self, period_type: PeriodType, period_start: date, session_id: UUID | None = None
+    ) -> AnalyticsSnapshot | None: ...
+
+    async def list(
+        self, period_type: PeriodType, session_id: UUID | None = None
+    ) -> list[AnalyticsSnapshot]: ...

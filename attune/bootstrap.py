@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+from attune.analytics.engine import AnalyticsEngine
 from attune.config.logging import configure_logging
 from attune.config.settings import Settings, get_settings
 from attune.container import Container
 from attune.core.events.bus import EventBus
 from attune.core.interfaces.bus import IEventBus
-from attune.core.interfaces.repository import IEventRepository, ISessionRepository, ISettingsStore
+from attune.core.interfaces.repository import (
+    IAnalyticsRepository,
+    IEventRepository,
+    ISessionRepository,
+    ISettingsStore,
+)
 from attune.database.event_logger import EventLogger
+from attune.database.repositories.analytics_repository import SqlAlchemyAnalyticsRepository
 from attune.database.repositories.event_repository import SqlAlchemyEventRepository
 from attune.database.repositories.session_repository import SqlAlchemySessionRepository
 from attune.database.repositories.settings_repository import SqlAlchemySettingsStore
@@ -39,9 +46,12 @@ def bootstrap(settings: Settings | None = None) -> Container:
     event_repository = SqlAlchemyEventRepository(session_factory)
     session_repository = SqlAlchemySessionRepository(session_factory)
     settings_store = SqlAlchemySettingsStore(session_factory)
+    analytics_repository = SqlAlchemyAnalyticsRepository(session_factory)
     container.register(IEventRepository, event_repository)  # type: ignore[type-abstract]
     container.register(ISessionRepository, session_repository)  # type: ignore[type-abstract]
     container.register(ISettingsStore, settings_store)  # type: ignore[type-abstract]
+    container.register(IAnalyticsRepository, analytics_repository)  # type: ignore[type-abstract]
+    container.register(AnalyticsEngine, AnalyticsEngine(event_repository, analytics_repository))
 
     event_bus.subscribe_all(EventLogger(event_repository).handle)
 

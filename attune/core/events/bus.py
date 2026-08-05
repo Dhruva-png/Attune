@@ -36,6 +36,4 @@ class EventBus:
         )
         for result in results:
             if isinstance(result, Exception):
-                logger.error(
-                    "Event handler failed for %s: %s", event.type, result, exc_info=result
-                )
+                logger.error("Event handler failed for %s: %s", event.type, result, exc_info=result)
