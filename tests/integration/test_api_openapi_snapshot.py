@@ -42,5 +42,6 @@ def test_openapi_schema_documents_every_spec_endpoint() -> None:
         "/api/v1/reports/weekly",
         "/api/v1/settings",
         "/api/v1/export",
+        "/api/v1/coach/insights",
     ):
         assert path in paths, f"{path} missing from generated OpenAPI schema"

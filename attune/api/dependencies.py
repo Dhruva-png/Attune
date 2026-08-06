@@ -11,6 +11,7 @@ from attune.core.interfaces.repository import (
     ISessionRepository,
     ISettingsStore,
 )
+from attune.llm.coach import AICoach
 
 
 def get_container(request: Request) -> Container:
@@ -39,6 +40,10 @@ def get_analytics_repository(request: Request) -> IAnalyticsRepository:
 
 def get_analytics_engine(request: Request) -> AnalyticsEngine:
     return get_container(request).resolve(AnalyticsEngine)
+
+
+def get_coach(request: Request) -> AICoach:
+    return get_container(request).resolve(AICoach)
 
 
 # WebSocket routes get a WebSocket connection scope, not a Request — FastAPI

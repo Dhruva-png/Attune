@@ -7,7 +7,7 @@ import uvicorn
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from attune.api.routers import events, export, live_stats, reports, sessions, settings
+from attune.api.routers import coach, events, export, live_stats, reports, sessions, settings
 from attune.bootstrap import bootstrap
 from attune.config.settings import get_settings
 from attune.container import Container
@@ -47,6 +47,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(reports.router, prefix=API_V1_PREFIX)
     app.include_router(settings.router, prefix=API_V1_PREFIX)
     app.include_router(export.router, prefix=API_V1_PREFIX)
+    app.include_router(coach.router, prefix=API_V1_PREFIX)
 
     return app
 

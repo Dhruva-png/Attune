@@ -38,12 +38,9 @@ dependencies = [
     "numpy>=1.26,<2.0",
     # Embeddings / local NLP
     "sentence-transformers>=3.2",
-    # LLM providers (thin HTTP clients; each provider is optional at runtime via provider abstraction)
-    "openai>=1.54",
-    "google-generativeai>=0.8",
-    "anthropic>=0.39",
-    "groq>=0.13",
-    "ollama>=0.3",
+    # LLM providers: each vendor's REST API is called directly over httpx
+    # (already a dependency below) rather than pulling in five separate SDKs
+    # with their own dependency trees — see attune/llm/providers/.
     # Desktop UI
     "PySide6>=6.8",
     "qasync>=0.27",

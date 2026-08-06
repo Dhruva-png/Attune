@@ -4,10 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from attune.analytics.engine import AnalyticsEngine
 from attune.config.logging import configure_logging
-from attune.config.settings import Settings, get_settings
+from attune.config.settings import LLMProviderName, Settings, get_settings
 from attune.container import Container
 from attune.core.events.bus import EventBus
 from attune.core.interfaces.bus import IEventBus
+from attune.core.interfaces.llm import ILLMProvider
 from attune.core.interfaces.repository import (
     IAnalyticsRepository,
     IEventRepository,
@@ -20,6 +21,8 @@ from attune.database.repositories.event_repository import SqlAlchemyEventReposit
 from attune.database.repositories.session_repository import SqlAlchemySessionRepository
 from attune.database.repositories.settings_repository import SqlAlchemySettingsStore
 from attune.database.session import create_engine, create_session_factory
+from attune.llm.coach import AICoach
+from attune.llm.factory import create_provider
 
 
 def bootstrap(settings: Settings | None = None) -> Container:
@@ -57,5 +60,15 @@ def bootstrap(settings: Settings | None = None) -> Container:
     container.register(AnalyticsEngine, AnalyticsEngine(event_repository, analytics_repository))
 
     event_bus.subscribe_all(EventLogger(event_repository).handle)
+
+    # Ollama is local, so it needs no separate consent; any other provider is
+    # "cloud AI" and only gets wired in when the user has explicitly opted in
+    # (docs/architecture/01-overview.md privacy boundary) — otherwise the
+    # Coach still runs, just without LLM-phrased insights.
+    llm_provider: ILLMProvider | None = None
+    if settings.llm.provider == LLMProviderName.OLLAMA or settings.privacy.cloud_ai_enabled:
+        llm_provider = create_provider(settings.llm)
+        container.register(ILLMProvider, llm_provider)  # type: ignore[type-abstract]
+    container.register(AICoach, AICoach(llm_provider=llm_provider))
 
     return container
