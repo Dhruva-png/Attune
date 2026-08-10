@@ -5,10 +5,9 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from PySide6.QtWidgets import QApplication
-
 from attune.dashboard.api_client import ApiClient
 from attune.dashboard.viewmodels.export_view_model import ExportViewModel
+from PySide6.QtWidgets import QApplication
 
 
 async def _wait_until(predicate, timeout: float = 1.0) -> None:  # type: ignore[no-untyped-def]
