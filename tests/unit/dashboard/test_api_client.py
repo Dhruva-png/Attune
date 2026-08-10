@@ -165,3 +165,43 @@ async def test_error_response_raises() -> None:
 
     with pytest.raises(httpx.HTTPStatusError):
         await client.get_settings()
+
+
+@pytest.mark.asyncio
+async def test_export_posts_scope_target_and_format() -> None:
+    captured: dict = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content
+        return httpx.Response(200, content=b"csv-data", headers={"content-type": "text/csv"})
+
+    client = _client_with(handler)
+    response = await client.export(scope="daily", target_id="2026-01-05", export_format="csv")
+
+    assert response.status_code == 200
+    assert response.content == b"csv-data"
+    assert b'"scope":"daily"' in captured["body"]
+    assert b'"format":"csv"' in captured["body"]
+
+
+@pytest.mark.asyncio
+async def test_get_report_status_returns_json() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "ready", "download_url": "/x"})
+
+    client = _client_with(handler)
+    status = await client.get_report_status("abc123")
+
+    assert status == {"status": "ready", "download_url": "/x"}
+
+
+@pytest.mark.asyncio
+async def test_download_report_returns_raw_response() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/reports/abc123/download"
+        return httpx.Response(200, content=b"%PDF-1.4", headers={"content-type": "application/pdf"})
+
+    client = _client_with(handler)
+    response = await client.download_report("abc123")
+
+    assert response.content == b"%PDF-1.4"

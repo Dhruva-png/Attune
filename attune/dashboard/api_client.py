@@ -79,3 +79,25 @@ class ApiClient:
         response = await self._client.get("/api/v1/coach/insights", params=params)
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
+
+    async def export(self, *, scope: str, target_id: str, export_format: str) -> httpx.Response:
+        """Returns the raw response — sync formats (json/csv) come back as a
+        200 with the file body attached; pdf/png come back as a 202 job
+        descriptor to poll via get_report_status/download_report.
+        """
+        response = await self._client.post(
+            "/api/v1/export",
+            json={"scope": scope, "target_id": target_id, "format": export_format},
+        )
+        response.raise_for_status()
+        return response
+
+    async def get_report_status(self, report_id: str) -> dict[str, Any]:
+        response = await self._client.get(f"/api/v1/reports/{report_id}")
+        response.raise_for_status()
+        return response.json()  # type: ignore[no-any-return]
+
+    async def download_report(self, report_id: str) -> httpx.Response:
+        response = await self._client.get(f"/api/v1/reports/{report_id}/download")
+        response.raise_for_status()
+        return response

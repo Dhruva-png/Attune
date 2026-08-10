@@ -103,7 +103,15 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["mediapipe.*", "ultralytics.*", "torch.*", "torchvision.*", "qasync.*"]
+module = [
+    "mediapipe.*",
+    "ultralytics.*",
+    "torch.*",
+    "torchvision.*",
+    "qasync.*",
+    "plotly.*",
+    "reportlab.*",
+]
 ignore_missing_imports = true
 follow_imports = "skip"
 

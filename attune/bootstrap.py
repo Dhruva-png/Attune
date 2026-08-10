@@ -23,6 +23,7 @@ from attune.database.repositories.settings_repository import SqlAlchemySettingsS
 from attune.database.session import create_engine, create_session_factory
 from attune.llm.coach import AICoach
 from attune.llm.factory import create_provider
+from attune.reports.jobs import ReportJobStore
 
 
 def bootstrap(settings: Settings | None = None) -> Container:
@@ -70,5 +71,6 @@ def bootstrap(settings: Settings | None = None) -> Container:
         llm_provider = create_provider(settings.llm)
         container.register(ILLMProvider, llm_provider)  # type: ignore[type-abstract]
     container.register(AICoach, AICoach(llm_provider=llm_provider))
+    container.register(ReportJobStore, ReportJobStore())
 
     return container

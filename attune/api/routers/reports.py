@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 
 from attune.analytics.engine import MAX_EVENTS_PER_ROLLUP, AnalyticsEngine
 from attune.analytics.timeline import TimelineEntry, build_timeline
-from attune.api.dependencies import get_analytics_engine, get_event_repository
+from attune.api.dependencies import get_analytics_engine, get_event_repository, get_report_job_store
+from attune.api.schemas.export import ReportStatusResponse
 from attune.api.schemas.reports import (
     DailyReportResponse,
     TimelineEntryResponse,
@@ -14,6 +17,7 @@ from attune.api.schemas.reports import (
 )
 from attune.core.entities.analytics_snapshot import PeriodType
 from attune.core.interfaces.repository import IEventRepository
+from attune.reports.jobs import ReportJobStatus, ReportJobStore
 
 router = APIRouter(tags=["reports"])
 
@@ -88,4 +92,39 @@ async def get_weekly_report(
         best_hours=snapshot.best_hours,
         worst_hours=snapshot.worst_hours,
         daily_breakdown=daily_breakdown,
+    )
+
+
+@router.get("/reports/{report_id}")
+async def get_report_status(
+    report_id: UUID,
+    job_store: ReportJobStore = Depends(get_report_job_store),
+) -> ReportStatusResponse:
+    """Polling endpoint for the async PDF/PNG jobs POST /export creates."""
+    job = job_store.get(report_id)
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="report not found")
+
+    if job.status == ReportJobStatus.READY:
+        return ReportStatusResponse(
+            status="ready", download_url=f"/api/v1/reports/{report_id}/download"
+        )
+    if job.status == ReportJobStatus.FAILED:
+        return ReportStatusResponse(status="failed", error=job.error)
+    return ReportStatusResponse(status="processing")
+
+
+@router.get("/reports/{report_id}/download")
+async def download_report(
+    report_id: UUID,
+    job_store: ReportJobStore = Depends(get_report_job_store),
+) -> Response:
+    job = job_store.get(report_id)
+    if job is None or job.status != ReportJobStatus.READY or job.content is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="report not ready")
+
+    return Response(
+        content=job.content,
+        media_type=job.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{job.filename}"'},
     )

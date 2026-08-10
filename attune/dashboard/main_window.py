@@ -17,6 +17,7 @@ from attune.dashboard.api_client import ApiClient
 from attune.dashboard.viewmodels import (
     AnalyticsViewModel,
     CoachViewModel,
+    ExportViewModel,
     LiveViewModel,
     SessionViewModel,
     SettingsViewModel,
@@ -62,12 +63,13 @@ class MainWindow(QWidget):
         self._analytics_view_model = AnalyticsViewModel(api_client, self)
         self._coach_view_model = CoachViewModel(api_client, self)
         self._settings_view_model = SettingsViewModel(api_client, self)
+        self._export_view_model = ExportViewModel(api_client, self)
 
         self._live_view = LiveView(self._live_view_model)
         for view in (
             self._live_view,
             TimelineView(self._timeline_view_model),
-            AnalyticsView(self._analytics_view_model),
+            AnalyticsView(self._analytics_view_model, self._export_view_model),
             CoachView(self._coach_view_model),
             SettingsView(self._settings_view_model),
         ):

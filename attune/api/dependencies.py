@@ -12,6 +12,7 @@ from attune.core.interfaces.repository import (
     ISettingsStore,
 )
 from attune.llm.coach import AICoach
+from attune.reports.jobs import ReportJobStore
 
 
 def get_container(request: Request) -> Container:
@@ -44,6 +45,10 @@ def get_analytics_engine(request: Request) -> AnalyticsEngine:
 
 def get_coach(request: Request) -> AICoach:
     return get_container(request).resolve(AICoach)
+
+
+def get_report_job_store(request: Request) -> ReportJobStore:
+    return get_container(request).resolve(ReportJobStore)
 
 
 # WebSocket routes get a WebSocket connection scope, not a Request — FastAPI
