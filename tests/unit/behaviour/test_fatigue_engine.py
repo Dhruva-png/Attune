@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import uuid4
 
+from attune.behaviour.face_geometry import LEFT_EYE_INDICES, MOUTH_INDICES, RIGHT_EYE_INDICES
 from attune.behaviour.fatigue.engine import FACE_REFERENCE_LANDMARK_INDEX, FatigueEngine
 from attune.core.entities.fatigue import FatigueLevel
 from attune.core.events.schema import EventType
 from attune.core.value_objects.geometry import Landmark, Point
-from attune.vision.face.signals import LEFT_EYE_INDICES, MOUTH_INDICES, RIGHT_EYE_INDICES
 
 T0 = datetime(2026, 1, 1, 9, 0, 0)
 FACE_COUNT = 400

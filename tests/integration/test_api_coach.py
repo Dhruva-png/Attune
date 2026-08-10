@@ -4,14 +4,15 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from httpx import AsyncClient
-
 from attune.container import Container
 from attune.core.events.schema import Event, EventType
 from attune.core.interfaces.repository import IEventRepository
+from httpx import AsyncClient
 
 
-async def _add_event(container: Container, session_id, event_type: EventType, when, **kwargs) -> None:
+async def _add_event(
+    container: Container, session_id, event_type: EventType, when, **kwargs
+) -> None:
     repository = container.resolve(IEventRepository)
     await repository.add(
         Event(

@@ -28,8 +28,8 @@ class MediaPipeFaceModel:
     """IFaceModel implementation backed by MediaPipe's FaceLandmarker Task.
 
     Returns raw mesh landmarks only (positionally indexed, name f"landmark_{i}");
-    derived signals (eye/mouth aspect ratio) live in attune.vision.face.signals,
-    kept separate from inference so they're testable without a loaded model.
+    derived signals (eye/mouth aspect ratio) live in attune.behaviour.face_geometry —
+    vision only produces landmarks, behaviour turns them into semantic signals.
     """
 
     def __init__(self, model_dir: Path, min_detection_confidence: float = 0.5) -> None:

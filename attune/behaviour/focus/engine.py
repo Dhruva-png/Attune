@@ -5,9 +5,9 @@ from datetime import datetime
 from uuid import UUID
 
 from attune.behaviour.confidence import gate
+from attune.behaviour.face_geometry import LEFT_EYE_INDICES, RIGHT_EYE_INDICES
 from attune.core.events.schema import Event, EventType
 from attune.core.value_objects.geometry import Landmark
-from attune.vision.face.signals import LEFT_EYE_INDICES, RIGHT_EYE_INDICES
 
 FACE_REFERENCE_LANDMARK_INDEX = 4  # nose tip in the 468-point face mesh topology
 GAZE_LOOKING_THRESHOLD = 0.7

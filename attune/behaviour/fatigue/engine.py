@@ -6,16 +6,16 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from attune.behaviour.confidence import gate
-from attune.core.entities.fatigue import FatigueLevel
-from attune.core.events.schema import Event, EventType
-from attune.core.value_objects.geometry import Landmark
-from attune.vision.face.signals import (
+from attune.behaviour.face_geometry import (
     LEFT_EYE_INDICES,
     MOUTH_INDICES,
     RIGHT_EYE_INDICES,
     eye_aspect_ratio,
     mouth_aspect_ratio,
 )
+from attune.core.entities.fatigue import FatigueLevel
+from attune.core.events.schema import Event, EventType
+from attune.core.value_objects.geometry import Landmark
 
 EYE_CLOSED_THRESHOLD = 0.2
 LONG_BLINK_MS = 400

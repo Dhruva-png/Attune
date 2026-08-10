@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from attune.behaviour.face_geometry import eye_aspect_ratio, mouth_aspect_ratio
 from attune.core.value_objects.geometry import Landmark, Point
-from attune.vision.face.signals import eye_aspect_ratio, mouth_aspect_ratio
 
 EYE_INDICES = (0, 1, 2, 3, 4, 5)
 MOUTH_INDICES = (0, 1, 2, 3)
