@@ -13,6 +13,11 @@ from attune.vision.preprocessing.pipeline import Preprocessor
 
 FrameProcessor = Callable[[FrameArray], None]
 
+# A webcam glitch (USB power blip, driver hiccup) is common and usually
+# transient — one reconnect attempt covers that case without turning a
+# genuinely unplugged/removed camera into a retry loop.
+MAX_RECONNECT_ATTEMPTS = 1
+
 
 class VisionPipeline:
     """Orchestrates camera -> preprocessing -> model inference -> events.
@@ -47,18 +52,42 @@ class VisionPipeline:
     async def run(self, session_id: UUID) -> None:
         await self._camera.start()
         try:
-            async for captured in self._camera.frames():
-                now = time.monotonic()
-                if not self._fps_governor.should_process(now):
-                    continue
-                processed_image = self._preprocessor.process(captured.image)
-                for processor in self._frame_processors:
-                    processor(processed_image)
-                self._processed_frame_count += 1
-        except ConnectionError as exc:
-            await self._publish_camera_disconnected(session_id, str(exc))
+            await self._consume_frames(session_id)
         finally:
             await self._camera.stop()
+
+    async def _consume_frames(self, session_id: UUID) -> None:
+        reconnect_attempts_left = MAX_RECONNECT_ATTEMPTS
+        while True:
+            try:
+                await self._process_frame_stream()
+                return  # camera ended the stream normally (e.g. session stop)
+            except ConnectionError as exc:
+                if reconnect_attempts_left <= 0 or not await self._try_reconnect(
+                    session_id, str(exc)
+                ):
+                    await self._publish_camera_disconnected(session_id, str(exc))
+                    return
+                reconnect_attempts_left -= 1
+
+    async def _process_frame_stream(self) -> None:
+        async for captured in self._camera.frames():
+            now = time.monotonic()
+            if not self._fps_governor.should_process(now):
+                continue
+            processed_image = self._preprocessor.process(captured.image)
+            for processor in self._frame_processors:
+                processor(processed_image)
+            self._processed_frame_count += 1
+
+    async def _try_reconnect(self, session_id: UUID, reason: str) -> bool:
+        await self._camera.stop()
+        try:
+            await self._camera.start()
+        except ConnectionError:
+            return False
+        await self._publish_camera_reconnected(session_id, reason)
+        return True
 
     async def _publish_camera_disconnected(self, session_id: UUID, reason: str) -> None:
         event = Event(
@@ -66,6 +95,16 @@ class VisionPipeline:
             type=EventType.CAMERA_DISCONNECTED,
             confidence=1.0,
             metadata={"reason": reason},
+            source_module=self._source_module,
+        )
+        await self._event_bus.publish(event)
+
+    async def _publish_camera_reconnected(self, session_id: UUID, previous_reason: str) -> None:
+        event = Event(
+            session_id=session_id,
+            type=EventType.CAMERA_RECONNECTED,
+            confidence=1.0,
+            metadata={"previous_reason": previous_reason},
             source_module=self._source_module,
         )
         await self._event_bus.publish(event)

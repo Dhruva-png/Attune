@@ -208,3 +208,27 @@ async def test_llm_failure_falls_back_to_deterministic_text() -> None:
     insights = await coach.generate_insights(events)
 
     assert insights[0].text.startswith("You consistently lose focus")
+
+
+@pytest.mark.asyncio
+async def test_phone_pickup_with_no_focus_data_in_its_window_is_ignored() -> None:
+    # Enough pickups to clear the sample-size floor, but each one has no
+    # FOCUS_SCORE_UPDATED events on both sides of it — there's nothing to
+    # compare, so it must be skipped rather than treated as "no drop".
+    events = [
+        make_event(EventType.PHONE_PICKUP, T0 + timedelta(hours=i)) for i in range(3)
+    ]
+    coach = AICoach()
+
+    insights = await coach.generate_insights(events)
+
+    assert not any("phone" in i.text.lower() for i in insights)
+
+
+def test_generated_by_reports_deterministic_without_a_provider() -> None:
+    assert AICoach().generated_by == "deterministic"
+
+
+def test_generated_by_reports_provider_name_when_configured() -> None:
+    stub = StubLLMProvider()
+    assert AICoach(llm_provider=stub).generated_by == "stub"

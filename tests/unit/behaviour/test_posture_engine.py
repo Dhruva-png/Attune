@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from attune.behaviour.posture.engine import PostureAnalyzer
+from attune.behaviour.posture.engine import PostureAnalyzer, PostureMetrics
 from attune.core.events.schema import EventType
 from attune.core.value_objects.geometry import Landmark, Point
 
@@ -130,3 +130,11 @@ def test_low_confidence_landmarks_are_suppressed() -> None:
     assert len(events) == 1
     assert events[0].type == EventType.LOW_CONFIDENCE_SUPPRESSED
     assert events[0].metadata["original_type"] == EventType.GOOD_POSTURE.value
+
+
+def test_posture_metrics_confidence_is_zero_when_landmarks_unavailable() -> None:
+    # A degraded detection (low light, upper body out of frame, ...) that's
+    # missing required landmarks shouldn't report a fabricated confidence.
+    metrics = PostureMetrics([landmark("nose", 0.5, 0.2)])
+    assert metrics.is_available is False
+    assert metrics.confidence == 0.0

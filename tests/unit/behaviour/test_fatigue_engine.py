@@ -167,3 +167,73 @@ def test_fatigue_level_starts_fresh_then_becomes_tired_after_yawn() -> None:
     assert len(level_change) == 1
     assert level_change[0].metadata["to_level"] == FatigueLevel.TIRED.value
     assert "yawning" in level_change[0].metadata["contributing_signals"]
+
+
+def _do_yawn(engine: FatigueEngine, session_id, start: datetime) -> list:
+    engine.update(make_face_landmarks(mouth_open=True), [], session_id, start)
+    events = engine.update(
+        make_face_landmarks(mouth_open=True), [], session_id, start + timedelta(milliseconds=600)
+    )
+    # mouth closes again so the next yawn is detected as a fresh occurrence
+    engine.update(
+        make_face_landmarks(mouth_open=False), [], session_id, start + timedelta(milliseconds=700)
+    )
+    return events
+
+
+def test_three_yawns_escalate_fatigue_to_very_tired() -> None:
+    engine = FatigueEngine()
+    session_id = uuid4()
+
+    _do_yawn(engine, session_id, T0)
+    _do_yawn(engine, session_id, T0 + timedelta(seconds=10))
+    third = _do_yawn(engine, session_id, T0 + timedelta(seconds=20))
+
+    level_change = [e for e in third if e.type == EventType.FATIGUE_LEVEL_CHANGED]
+    assert len(level_change) == 1
+    assert level_change[0].metadata["to_level"] == FatigueLevel.VERY_TIRED.value
+
+
+def _do_blink(engine: FatigueEngine, session_id, at: datetime) -> list:
+    engine.update(make_face_landmarks(eyes_open=False), [], session_id, at)
+    return engine.update(
+        make_face_landmarks(eyes_open=True), [], session_id, at + timedelta(milliseconds=100)
+    )
+
+
+def test_elevated_blink_rate_is_reported_as_a_contributing_signal() -> None:
+    engine = FatigueEngine()
+    session_id = uuid4()
+
+    all_events: list = []
+    for i in range(13):  # >12 blinks/min crosses the "elevated_blink_rate" threshold
+        all_events.extend(_do_blink(engine, session_id, T0 + timedelta(seconds=i)))
+
+    level_changes = [e for e in all_events if e.type == EventType.FATIGUE_LEVEL_CHANGED]
+    assert any("elevated_blink_rate" in e.metadata["contributing_signals"] for e in level_changes)
+
+
+def test_stale_fatigue_signals_age_out_of_the_rolling_window() -> None:
+    # A long-running session shouldn't let an isolated cluster of fatigue
+    # signals from an hour ago keep depressing the *current* reading forever.
+    engine = FatigueEngine()
+    session_id = uuid4()
+    near_nose = hand_at(0.5, 0.35)
+    far_away = hand_at(0.9, 0.9)
+
+    engine.update(make_face_landmarks(), near_nose, session_id, T0)
+    engine.update(make_face_landmarks(), far_away, session_id, T0)  # release
+    escalated = engine.update(
+        make_face_landmarks(), near_nose, session_id, T0 + timedelta(seconds=1)
+    )
+    escalation = [e for e in escalated if e.type == EventType.FATIGUE_LEVEL_CHANGED]
+    assert len(escalation) == 1
+    assert escalation[0].metadata["to_level"] == FatigueLevel.NORMAL.value
+
+    # Past the 60s rolling window — both prior face-touches should age out.
+    later = T0 + timedelta(seconds=1, minutes=2)
+    aged_out = engine.update(make_face_landmarks(), far_away, session_id, later)
+
+    recovery = [e for e in aged_out if e.type == EventType.FATIGUE_LEVEL_CHANGED]
+    assert len(recovery) == 1
+    assert recovery[0].metadata["to_level"] == FatigueLevel.FRESH.value

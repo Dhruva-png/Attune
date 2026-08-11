@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 from attune.behaviour.face_geometry import LEFT_EYE_INDICES, RIGHT_EYE_INDICES
-from attune.behaviour.focus.engine import FocusEngine
+from attune.behaviour.focus.engine import FocusEngine, gaze_symmetry
 from attune.core.events.schema import EventType
 from attune.core.value_objects.geometry import Landmark, Point
 
@@ -108,3 +108,34 @@ def test_looked_away_then_return_reports_duration() -> None:
     assert len(looking_events) == 1
     assert looking_events[0].duration_ms is not None
     assert looking_events[0].duration_ms > 0
+
+
+def test_gaze_symmetry_is_none_with_too_few_landmarks() -> None:
+    # A degraded detection (e.g. low light, partial occlusion) that only
+    # yields a handful of landmarks — not enough to locate both eyes + nose.
+    assert gaze_symmetry([Landmark(name="p", point=Point(0.5, 0.5, 0.0))]) is None
+
+
+def test_gaze_symmetry_is_one_when_nose_and_eyes_coincide() -> None:
+    # Degenerate geometry (both eye-to-nose distances are exactly zero)
+    # shouldn't divide by zero — treated as perfectly centered.
+    landmarks = [
+        Landmark(name=f"landmark_{i}", point=Point(0.5, 0.5, 0.0)) for i in range(FACE_COUNT)
+    ]
+    assert gaze_symmetry(landmarks) == 1.0
+
+
+def test_insufficient_face_landmarks_gates_the_score_as_low_confidence() -> None:
+    # Simulates a low-light / degraded-detection frame: too few landmarks to
+    # compute gaze, so the engine falls back to a neutral gaze factor with
+    # confidence 0.5 — below the default 0.6 gate, so it's suppressed rather
+    # than surfaced as a confidently-wrong score.
+    engine = FocusEngine()
+    sparse_landmarks = [Landmark(name="p", point=Point(0.5, 0.5, 0.0))]
+
+    events = engine.update(sparse_landmarks, True, True, False, uuid4(), T0)
+
+    assert EventType.FOCUS_SCORE_UPDATED not in [e.type for e in events]
+    suppressed = next(e for e in events if e.type == EventType.LOW_CONFIDENCE_SUPPRESSED)
+    assert suppressed.metadata["original_type"] == EventType.FOCUS_SCORE_UPDATED.value
+    assert suppressed.metadata["original_confidence"] == 0.5

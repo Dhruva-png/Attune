@@ -39,3 +39,19 @@ async def test_fail_after_raises_connection_error_and_disconnects() -> None:
 
     assert [f.frame_id for f in collected] == [1, 2, 3]
     assert camera.is_connected is False
+
+
+@pytest.mark.asyncio
+async def test_stopping_mid_stream_ends_iteration_without_error() -> None:
+    # e.g. the user ends the session while a frame is mid-flight — frames()
+    # should stop cleanly, not keep draining the remaining source frames.
+    camera = MockCamera(frame_count=5)
+    await camera.start()
+
+    collected = []
+    async for frame in camera.frames():
+        collected.append(frame)
+        if len(collected) == 2:
+            await camera.stop()
+
+    assert [f.frame_id for f in collected] == [1, 2]
