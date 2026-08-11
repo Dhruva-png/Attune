@@ -5,7 +5,7 @@ next begins. No milestone starts application code before the previous one's test
 
 | # | Milestone | Deliverables | Exit criteria |
 |---|---|---|---|
-| M0 | **Architecture & scaffolding** *(this milestone)* | Docs in `docs/architecture/`, full folder skeleton, `pyproject.toml`, config loading, structured logging, CI skeleton | Docs reviewed by user; `pip install -e .` succeeds; empty package imports cleanly |
+| M0 | **Architecture & scaffolding** | Docs in `docs/architecture/`, full folder skeleton, `pyproject.toml`, config loading, structured logging, CI skeleton | Docs reviewed by user; `pip install -e .` succeeds; empty package imports cleanly |
 | M1 | **Core domain + event bus** | `core/entities`, `core/events` (Event, EventType, EventBus), `core/interfaces` ports, DI container | Unit tests: publish/subscribe, confidence gating, ordering guarantees |
 | M2 | **Camera + vision pipeline skeleton** | `vision/camera` (OpenCVCamera + MockCamera), frame buffer, preprocessing, `vision/pipeline.py` wiring with no-op models | Runs against MockCamera in CI (no real webcam needed); FPS governor tested; camera-disconnect test passes |
 | M3 | **Pose, Face, Hands modules** | MediaPipe wrappers publishing landmark events | Unit tests with recorded frame fixtures; latency budget test (5–10 FPS) |
@@ -37,8 +37,9 @@ next begins. No milestone starts application code before the previous one's test
   *seen* and used for screenshots/marketing, which is its whole purpose.
 - M13–M14 close the loop on the spec's "production-ready repository" requirement.
 
-## Immediate next step
+## Status
 
-M0 finishes with this document set plus the physical folder/package scaffolding and project
-config (see companion changes in this milestone). M1 (core domain + event bus) is the first
-milestone that writes real application logic, and is the natural place to resume.
+All 14 milestones are complete. Each row above reflects what actually shipped, not just what was
+planned — the exit criteria for every milestone were met before the next one started, per the
+methodology at the top of this document. See the [README](../../README.md) for how to run the
+result and [CONTRIBUTING.md](../../CONTRIBUTING.md) for how to extend it.

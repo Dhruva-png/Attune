@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a new feature or enhancement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that Attune doesn't support today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: |
+        If you have one in mind. Note the architectural layering rules in
+        [CONTRIBUTING.md](../../CONTRIBUTING.md) — e.g. new detection signals go through
+        `attune/behaviour/`, new UI surfaces talk to `attune/api/`, never straight to the
+        database or vision pipeline.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you thought about, and why you didn't go with them.
