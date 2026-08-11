@@ -6,6 +6,11 @@ from uuid import UUID
 
 import httpx
 
+# LLM-backed and can take much longer than a snappy local DB call — a cold
+# Ollama model load alone has been observed at 25s+, well past the client's
+# default request timeout, so this endpoint gets its own generous budget.
+COACH_INSIGHTS_TIMEOUT_SECONDS = 90.0
+
 
 class ApiClient:
     """Thin async HTTP client over the local Attune FastAPI backend — the
@@ -76,7 +81,9 @@ class ApiClient:
             params["session_id"] = str(session_id)
         if period is not None:
             params["period"] = period
-        response = await self._client.get("/api/v1/coach/insights", params=params)
+        response = await self._client.get(
+            "/api/v1/coach/insights", params=params, timeout=COACH_INSIGHTS_TIMEOUT_SECONDS
+        )
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
 

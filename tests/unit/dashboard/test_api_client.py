@@ -157,6 +157,23 @@ async def test_get_coach_insights_includes_session_id_when_set() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_coach_insights_uses_a_generous_timeout() -> None:
+    # LLM-backed and can take far longer than a normal local API call (a
+    # cold Ollama model load alone has been observed at 25s+) — this must
+    # not use the client's default short timeout.
+    captured: dict = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["timeout"] = request.extensions.get("timeout")
+        return httpx.Response(200, json={"insights": []})
+
+    client = _client_with(handler)
+    await client.get_coach_insights(period="weekly")
+
+    assert captured["timeout"]["read"] >= 60.0
+
+
+@pytest.mark.asyncio
 async def test_error_response_raises() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500)
