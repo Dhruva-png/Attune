@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -45,6 +46,7 @@ class MainWindow(QWidget):
         self.setObjectName("RootWindow")
         self.setWindowTitle("Attune")
         self.resize(1280, 800)
+        self._center_on_screen()
 
         self._session_view_model = SessionViewModel(api_client, self)
 
@@ -90,6 +92,14 @@ class MainWindow(QWidget):
         self._settings_view_model.load()
 
         self._nav_buttons[0].setChecked(True)
+
+    def _center_on_screen(self) -> None:
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        frame = self.frameGeometry()
+        frame.moveCenter(screen.availableGeometry().center())
+        self.move(frame.topLeft())
 
     def _build_nav_rail(self) -> QFrame:
         rail = QFrame()
