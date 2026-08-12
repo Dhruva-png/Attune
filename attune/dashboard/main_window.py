@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from attune.dashboard.api_client import ApiClient
+from attune.dashboard.theme import app_icon
 from attune.dashboard.viewmodels import (
     AnalyticsViewModel,
     CoachViewModel,
@@ -45,6 +46,7 @@ class MainWindow(QWidget):
         super().__init__(parent)
         self.setObjectName("RootWindow")
         self.setWindowTitle("Attune")
+        self.setWindowIcon(app_icon())
         self.resize(1280, 800)
         self._center_on_screen()
 

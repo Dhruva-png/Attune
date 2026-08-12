@@ -13,7 +13,7 @@ from attune.config.settings import get_settings
 from attune.container import Container
 from attune.dashboard.api_client import ApiClient
 from attune.dashboard.main_window import MainWindow
-from attune.dashboard.theme import build_stylesheet
+from attune.dashboard.theme import app_icon, build_stylesheet
 
 # Composition root for the desktop app, kept out of attune.dashboard so that
 # package stays a pure HTTP client of the backend (see api_client.py) per
@@ -43,6 +43,7 @@ def run() -> None:
 
     qt_app = QApplication(sys.argv)
     qt_app.setApplicationName(settings.app_name)
+    qt_app.setWindowIcon(app_icon())
     qt_app.setStyleSheet(build_stylesheet())
 
     loop = qasync.QEventLoop(qt_app)
