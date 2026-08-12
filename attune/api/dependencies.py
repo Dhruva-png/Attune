@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import Request, WebSocket
 
 from attune.analytics.engine import AnalyticsEngine
+from attune.api.live_session_manager import LiveSessionManager
 from attune.container import Container
 from attune.core.interfaces.bus import IEventBus
 from attune.core.interfaces.repository import (
@@ -49,6 +50,10 @@ def get_coach(request: Request) -> AICoach:
 
 def get_report_job_store(request: Request) -> ReportJobStore:
     return get_container(request).resolve(ReportJobStore)
+
+
+def get_live_session_manager(request: Request) -> LiveSessionManager:
+    return get_container(request).resolve(LiveSessionManager)
 
 
 # WebSocket routes get a WebSocket connection scope, not a Request — FastAPI

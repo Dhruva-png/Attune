@@ -41,14 +41,21 @@ class OpenCVCamera:
     def is_connected(self) -> bool:
         return self._connected
 
+    def _open_capture(self) -> cv2.VideoCapture:
+        # Device enumeration/opening is blocking I/O — offloaded to a thread
+        # in start() below so it doesn't stall the event loop (and therefore
+        # the whole API) for however long the OS takes to hand back a handle.
+        capture = cv2.VideoCapture(self._device_index)
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
+        capture.set(cv2.CAP_PROP_FPS, self._fps)
+        return capture
+
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._queue = asyncio.Queue(maxsize=4)
         self._frame_id = 0
-        self._capture = cv2.VideoCapture(self._device_index)
-        self._capture.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
-        self._capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
-        self._capture.set(cv2.CAP_PROP_FPS, self._fps)
+        self._capture = await self._loop.run_in_executor(None, self._open_capture)
 
         if not self._capture.isOpened():
             self._capture.release()

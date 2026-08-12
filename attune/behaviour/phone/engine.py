@@ -49,6 +49,10 @@ class PhoneInteractionEngine:
         self._is_held = False
         self._pickup_at: datetime | None = None
 
+    @property
+    def is_held(self) -> bool:
+        return self._is_held
+
     def update(
         self,
         phone_detections: list[TrackedDetection],

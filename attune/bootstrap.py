@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from attune.analytics.engine import AnalyticsEngine
+from attune.api.live_session_manager import LiveSessionManager
 from attune.config.logging import configure_logging
 from attune.config.settings import LLMProviderName, Settings, get_settings
 from attune.container import Container
@@ -72,5 +73,13 @@ def bootstrap(settings: Settings | None = None) -> Container:
         container.register(ILLMProvider, llm_provider)  # type: ignore[type-abstract]
     container.register(AICoach, AICoach(llm_provider=llm_provider))
     container.register(ReportJobStore, ReportJobStore())
+    container.register(
+        LiveSessionManager,
+        LiveSessionManager(
+            event_bus,
+            settings.data_dir / "models",
+            settings.performance.confidence_threshold,
+        ),
+    )
 
     return container

@@ -3,7 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from attune.analytics.engine import MAX_EVENTS_PER_ROLLUP, compute_rollup
-from attune.api.dependencies import get_event_bus, get_event_repository, get_session_repository
+from attune.api.dependencies import (
+    get_event_bus,
+    get_event_repository,
+    get_live_session_manager,
+    get_session_repository,
+)
+from attune.api.live_session_manager import LiveSessionManager
 from attune.api.schemas.session import EndSessionRequest, SessionResponse, StartSessionRequest
 from attune.core.entities.analytics_snapshot import PeriodType
 from attune.core.entities.fatigue import FatigueLevel
@@ -32,6 +38,7 @@ async def start_session(
     request: StartSessionRequest,
     session_repository: ISessionRepository = Depends(get_session_repository),
     event_bus: IEventBus = Depends(get_event_bus),
+    live_session_manager: LiveSessionManager = Depends(get_live_session_manager),
 ) -> SessionResponse:
     session = Session()
     await session_repository.add(session)
@@ -44,6 +51,7 @@ async def start_session(
             source_module="api.sessions",
         )
     )
+    live_session_manager.start(session.id, request.camera_index)
     return _to_response(session)
 
 
@@ -53,6 +61,7 @@ async def end_session(
     session_repository: ISessionRepository = Depends(get_session_repository),
     event_repository: IEventRepository = Depends(get_event_repository),
     event_bus: IEventBus = Depends(get_event_bus),
+    live_session_manager: LiveSessionManager = Depends(get_live_session_manager),
 ) -> SessionResponse:
     session = await session_repository.get(request.session_id)
     if session is None:
@@ -61,6 +70,8 @@ async def end_session(
         raise HTTPException(
             status.HTTP_409_CONFLICT, detail=f"session is {session.status.value}, not active"
         )
+
+    await live_session_manager.stop(session.id)
 
     events = await event_repository.list(session_id=session.id, limit=MAX_EVENTS_PER_ROLLUP)
     day = session.started_at.date()

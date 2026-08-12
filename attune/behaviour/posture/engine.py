@@ -81,6 +81,12 @@ class PostureAnalyzer:
         self._is_slumping = False
         self._slump_started_at: datetime | None = None
 
+    @property
+    def posture_is_good(self) -> bool | None:
+        """None until the first confirmed reading — callers (e.g. FocusEngine)
+        should treat that as "unknown", not "poor"."""
+        return None if self._is_poor is None else not self._is_poor
+
     def update(
         self, landmarks: list[Landmark], session_id: UUID, timestamp: datetime
     ) -> list[Event]:
