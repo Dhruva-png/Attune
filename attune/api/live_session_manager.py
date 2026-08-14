@@ -15,6 +15,7 @@ from attune.behaviour.phone.engine import PhoneInteractionEngine
 from attune.behaviour.posture.engine import PostureAnalyzer
 from attune.core.events.schema import Event
 from attune.core.interfaces.bus import IEventBus
+from attune.core.value_objects.detection import Detection
 from attune.vision.camera.opencv_camera import OpenCVCamera
 from attune.vision.camera.types import FrameArray
 from attune.vision.face.model import MediaPipeFaceModel
@@ -38,6 +39,15 @@ _PHONE_DETECTION_CONFIDENCE = 0.35
 # dominant lever for keeping a CPU-only laptop responsive during a session.
 _CAMERA_WIDTH = 640
 _CAMERA_HEIGHT = 480
+
+# YOLO alone costs ~4-5x as much as pose+face+hand combined (measured ~90ms
+# vs ~40ms on a 4-core/8-thread laptop CPU) despite being one of four models
+# run per frame — it dominates the per-frame budget. Phone presence doesn't
+# need frame-perfect updates the way head-pose/focus tracking does, so it
+# only runs every Nth processed frame; pose/face/hand still run every frame.
+# Detections are held over the skipped frames so the phone tracker/overlay
+# don't flicker between "seen" and "gone" every cycle.
+_YOLO_FRAME_STRIDE = 3
 
 
 class LiveSessionManager:
@@ -138,6 +148,8 @@ class LiveSessionManager:
         # previous frame, so the stale one is dropped rather than queued —
         # same graceful-degradation principle as FrameBuffer.
         frame_queue: asyncio.Queue[FrameArray] = asyncio.Queue(maxsize=1)
+        processed_frame_count = 0
+        last_detections: list[Detection] = []
 
         def enqueue_frame(frame: FrameArray) -> None:
             if frame_queue.full():
@@ -146,11 +158,17 @@ class LiveSessionManager:
             frame_queue.put_nowait(frame)
 
         def run_inference(frame: FrameArray) -> tuple[list[Event], bytes]:
+            nonlocal processed_frame_count, last_detections
             timestamp = datetime.utcnow()
             pose_landmarks = pose_model.infer(frame)
             face_landmarks = face_model.infer(frame)
             hand_landmarks = hand_model.infer(frame)
-            detections = object_model.infer(frame)
+
+            processed_frame_count += 1
+            if processed_frame_count % _YOLO_FRAME_STRIDE == 0:
+                last_detections = object_model.infer(frame)
+            detections = last_detections
+
             tracked = tracker.update(detections)
             phone_tracks = [t for t in tracked if t.detection.label == PHONE_LABEL]
             is_present = bool(pose_landmarks)
