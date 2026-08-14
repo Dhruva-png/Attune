@@ -1458,6 +1458,24 @@
         ]
       }
     },
+    "/api/v1/live-stats/frame": {
+      "get": {
+        "description": "Latest annotated camera frame (skeleton/mesh/hand points + phone boxes\ndrawn on) for the active session, as a JPEG. The dashboard polls this on a\nshort interval to render a live preview \u2014 no websocket needed since each\npoll only ever wants the newest frame, never a backlog.",
+        "operationId": "get_live_frame_api_v1_live_stats_frame_get",
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {}
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Live Frame",
+        "tags": [
+          "live-stats"
+        ]
+      }
+    },
     "/api/v1/reports/daily": {
       "get": {
         "operationId": "get_daily_report_api_v1_reports_daily_get",

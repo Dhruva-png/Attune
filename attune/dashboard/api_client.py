@@ -46,6 +46,13 @@ class ApiClient:
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
 
+    async def get_live_frame(self) -> bytes | None:
+        response = await self._client.get("/api/v1/live-stats/frame")
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.content
+
     async def list_events(self, **params: Any) -> dict[str, Any]:
         response = await self._client.get("/api/v1/events", params=params)
         response.raise_for_status()

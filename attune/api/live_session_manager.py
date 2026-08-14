@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
+from attune.api.frame_overlay import draw_overlays, encode_jpeg
 from attune.behaviour.breaks.engine import AwayDetector
 from attune.behaviour.fatigue.engine import FatigueEngine
 from attune.behaviour.focus.engine import FocusEngine
@@ -22,8 +23,21 @@ from attune.vision.objects.model import PHONE_LABEL, YOLOObjectModel
 from attune.vision.pipeline import VisionPipeline
 from attune.vision.pose.model import MediaPipePoseModel
 from attune.vision.tracking.iou_tracker import IOUTracker
+from attune.vision.tracking.phone_presence import PhonePresenceTracker
 
 logger = logging.getLogger(__name__)
+
+# Lower than YOLOObjectModel's own default (0.5) — a phone held at an angle or
+# partially out of frame often lands in the 0.35-0.5 band, and missing those
+# is exactly what "the phone thing doesn't seem to be working" reports.
+# PhonePresenceTracker still debounces by track_id, so this doesn't spam events.
+_PHONE_DETECTION_CONFIDENCE = 0.35
+
+# Halving each capture dimension cuts pixels (and therefore MediaPipe/YOLO
+# inference cost) to a quarter of the camera's 1280x720 default — the
+# dominant lever for keeping a CPU-only laptop responsive during a session.
+_CAMERA_WIDTH = 640
+_CAMERA_HEIGHT = 480
 
 
 class LiveSessionManager:
@@ -49,9 +63,13 @@ class LiveSessionManager:
         self._model_dir = model_dir
         self._confidence_threshold = confidence_threshold
         self._tasks: dict[UUID, asyncio.Task[None]] = {}
+        self._latest_frames: dict[UUID, bytes] = {}
 
     def is_active(self, session_id: UUID) -> bool:
         return session_id in self._tasks
+
+    def get_latest_frame(self, session_id: UUID) -> bytes | None:
+        return self._latest_frames.get(session_id)
 
     def start(self, session_id: UUID, camera_index: int = 0) -> None:
         if session_id in self._tasks:
@@ -73,6 +91,7 @@ class LiveSessionManager:
             logger.exception("live session %s failed", session_id)
         finally:
             self._tasks.pop(session_id, None)
+            self._latest_frames.pop(session_id, None)
 
     def _load_models(
         self,
@@ -85,16 +104,22 @@ class LiveSessionManager:
             MediaPipePoseModel(self._model_dir),
             MediaPipeFaceModel(self._model_dir),
             MediaPipeHandModel(self._model_dir),
-            YOLOObjectModel(self._model_dir),
+            YOLOObjectModel(self._model_dir, min_confidence=_PHONE_DETECTION_CONFIDENCE),
         )
 
     async def _run_unsafe(self, session_id: UUID, camera_index: int) -> None:
         loop = asyncio.get_running_loop()
-        camera = OpenCVCamera(device_index=camera_index)
+        camera = OpenCVCamera(device_index=camera_index, width=_CAMERA_WIDTH, height=_CAMERA_HEIGHT)
         pose_model, face_model, hand_model, object_model = await loop.run_in_executor(
             None, self._load_models
         )
         tracker = IOUTracker()
+        # Separate from `tracker` above: that one feeds PhoneInteractionEngine
+        # (hand-proximity pickup/putdown transitions), this one feeds
+        # PhonePresenceTracker (fires once per new phone sighting regardless
+        # of hand proximity) — two different behavioural questions over the
+        # same detections, so they need independent per-track debounce state.
+        phone_presence = PhonePresenceTracker()
 
         focus_engine = FocusEngine(confidence_threshold=self._confidence_threshold)
         fatigue_engine = FatigueEngine(confidence_threshold=self._confidence_threshold)
@@ -120,16 +145,17 @@ class LiveSessionManager:
                     frame_queue.get_nowait()
             frame_queue.put_nowait(frame)
 
-        def run_inference(frame: FrameArray) -> list[Event]:
+        def run_inference(frame: FrameArray) -> tuple[list[Event], bytes]:
             timestamp = datetime.utcnow()
             pose_landmarks = pose_model.infer(frame)
             face_landmarks = face_model.infer(frame)
             hand_landmarks = hand_model.infer(frame)
-            tracked = tracker.update(object_model.infer(frame))
+            detections = object_model.infer(frame)
+            tracked = tracker.update(detections)
             phone_tracks = [t for t in tracked if t.detection.label == PHONE_LABEL]
             is_present = bool(pose_landmarks)
 
-            return [
+            events = [
                 *posture_analyzer.update(pose_landmarks, session_id, timestamp),
                 *away_detector.update(is_present, session_id, timestamp),
                 *phone_engine.update(phone_tracks, hand_landmarks, session_id, timestamp),
@@ -143,11 +169,25 @@ class LiveSessionManager:
                     timestamp,
                 ),
             ]
+            presence_event = phone_presence.update(detections, session_id)
+            if presence_event is not None:
+                events.append(presence_event)
+
+            annotated = draw_overlays(
+                frame,
+                pose_landmarks=pose_landmarks,
+                face_landmarks=face_landmarks,
+                hand_landmarks=hand_landmarks,
+                phone_tracks=phone_tracks,
+            )
+            return events, encode_jpeg(annotated)
 
         async def process_frames() -> None:
             while True:
                 frame = await frame_queue.get()
-                for event in await loop.run_in_executor(None, run_inference, frame):
+                events, jpeg = await loop.run_in_executor(None, run_inference, frame)
+                self._latest_frames[session_id] = jpeg
+                for event in events:
                     await self._event_bus.publish(event)
 
         pipeline = VisionPipeline(camera, self._event_bus, frame_processors=[enqueue_frame])

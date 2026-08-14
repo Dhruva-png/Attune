@@ -3,12 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QGridLayout, QLabel, QListWidget, QVBoxLayout, QWidget
 
 from attune.dashboard.viewmodels.live_view_model import LiveViewModel
 from attune.dashboard.widgets import Card, FocusGauge, StatusPill
 
 MAX_LIVE_EVENTS_SHOWN = 10
+CAMERA_PREVIEW_MIN_HEIGHT = 240
+NO_SESSION_MESSAGE = "No active session — camera preview appears once a session starts."
 
 
 class LiveView(QWidget):
@@ -24,14 +27,12 @@ class LiveView(QWidget):
         top_row.setSpacing(16)
 
         camera_card = Card("Camera Preview")
-        camera_placeholder = QLabel(
-            "No active session — camera preview appears once a session starts."
-        )
-        camera_placeholder.setProperty("role", "secondary")
-        camera_placeholder.setWordWrap(True)
-        camera_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        camera_placeholder.setMinimumHeight(160)
-        camera_card.body_layout.addWidget(camera_placeholder)
+        self._camera_label = QLabel(NO_SESSION_MESSAGE)
+        self._camera_label.setProperty("role", "secondary")
+        self._camera_label.setWordWrap(True)
+        self._camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._camera_label.setMinimumHeight(CAMERA_PREVIEW_MIN_HEIGHT)
+        camera_card.body_layout.addWidget(self._camera_label)
 
         focus_card = Card("Focus Score")
         self._gauge = FocusGauge()
@@ -85,6 +86,8 @@ class LiveView(QWidget):
 
         self._view_model.stats_updated.connect(self._on_stats_updated)
         self._view_model.stats_unavailable.connect(self._on_stats_unavailable)
+        self._view_model.frame_updated.connect(self._on_frame_updated)
+        self._view_model.frame_unavailable.connect(self._on_frame_unavailable)
 
     def _on_stats_updated(self, stats: dict[str, Any]) -> None:
         self._gauge.set_value(stats.get("focus_score"))
@@ -110,6 +113,21 @@ class LiveView(QWidget):
         self._posture_pill.set_status("unknown")
         self._phone_label.setText("--")
         self._breaks_label.setText("--")
+        self._on_frame_unavailable()
+
+    def _on_frame_updated(self, jpeg_bytes: bytes) -> None:
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(jpeg_bytes, b"JPG"):
+            return
+        self._camera_label.setPixmap(
+            pixmap.scaledToHeight(
+                CAMERA_PREVIEW_MIN_HEIGHT, Qt.TransformationMode.SmoothTransformation
+            )
+        )
+
+    def _on_frame_unavailable(self) -> None:
+        self._camera_label.setPixmap(QPixmap())
+        self._camera_label.setText(NO_SESSION_MESSAGE)
 
     def set_events(self, events: list[dict[str, Any]]) -> None:
         self._events_list.clear()

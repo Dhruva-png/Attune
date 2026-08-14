@@ -3,14 +3,24 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 
 from attune.analytics.engine import MAX_EVENTS_PER_ROLLUP
 from attune.api.dependencies import (
     get_event_bus_ws,
     get_event_repository,
+    get_live_session_manager,
     get_session_repository,
 )
+from attune.api.live_session_manager import LiveSessionManager
 from attune.api.schemas.live_stats import BreakStats, LiveStatsResponse, PhoneActivity
 from attune.core.entities.fatigue import FatigueLevel
 from attune.core.events.schema import Event, EventType
@@ -87,6 +97,32 @@ async def get_live_stats(
             longest_seconds=max(break_durations) if break_durations else 0.0,
         ),
     )
+
+
+@router.get(
+    "/live-stats/frame",
+    responses={200: {"content": {"image/jpeg": {}}}},
+    response_class=Response,
+)
+async def get_live_frame(
+    session_repository: ISessionRepository = Depends(get_session_repository),
+    live_session_manager: LiveSessionManager = Depends(get_live_session_manager),
+) -> Response:
+    """Latest annotated camera frame (skeleton/mesh/hand points + phone boxes
+    drawn on) for the active session, as a JPEG. The dashboard polls this on a
+    short interval to render a live preview — no websocket needed since each
+    poll only ever wants the newest frame, never a backlog.
+    """
+    active_sessions = await session_repository.list_active()
+    if not active_sessions:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="no active session")
+    session = max(active_sessions, key=lambda s: s.started_at)
+
+    frame = live_session_manager.get_latest_frame(session.id)
+    if frame is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="no frame available yet")
+
+    return Response(content=frame, media_type="image/jpeg")
 
 
 @router.websocket("/live-stats/stream")
