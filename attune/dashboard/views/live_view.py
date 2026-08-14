@@ -117,7 +117,11 @@ class LiveView(QWidget):
 
     def _on_frame_updated(self, jpeg_bytes: bytes) -> None:
         pixmap = QPixmap()
-        if not pixmap.loadFromData(jpeg_bytes, b"JPG"):
+        # No format hint: Qt auto-detects JPEG from the magic bytes, and
+        # passing one explicitly (even "JPG"/b"JPG") raises a ValueError from
+        # this PySide6 build's overload resolution rather than just failing
+        # to match — confirmed against a real frame from a running session.
+        if not pixmap.loadFromData(jpeg_bytes):
             return
         self._camera_label.setPixmap(
             pixmap.scaledToHeight(
