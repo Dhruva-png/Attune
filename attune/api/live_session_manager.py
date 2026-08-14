@@ -102,9 +102,25 @@ class LiveSessionManager:
         phone_engine = PhoneInteractionEngine(confidence_threshold=self._confidence_threshold)
         away_detector = AwayDetector(confidence_threshold=self._confidence_threshold)
 
-        event_queue: asyncio.Queue[Event] = asyncio.Queue()
+        # Four model inferences per frame is real CPU work (hundreds of ms on
+        # a laptop CPU) — running it synchronously on this coroutine would
+        # block the event loop, and the API runs in-process on the *same*
+        # loop the Qt GUI uses (qasync), so the whole window would freeze on
+        # every processed frame. frame_processors only ever hands off the
+        # latest frame; the actual inference happens in a thread via
+        # run_in_executor, keeping the UI responsive no matter how slow
+        # inference is. A full queue means inference is still busy with the
+        # previous frame, so the stale one is dropped rather than queued —
+        # same graceful-degradation principle as FrameBuffer.
+        frame_queue: asyncio.Queue[FrameArray] = asyncio.Queue(maxsize=1)
 
-        def process_frame(frame: FrameArray) -> None:
+        def enqueue_frame(frame: FrameArray) -> None:
+            if frame_queue.full():
+                with suppress(asyncio.QueueEmpty):
+                    frame_queue.get_nowait()
+            frame_queue.put_nowait(frame)
+
+        def run_inference(frame: FrameArray) -> list[Event]:
             timestamp = datetime.utcnow()
             pose_landmarks = pose_model.infer(frame)
             face_landmarks = face_model.infer(frame)
@@ -113,7 +129,7 @@ class LiveSessionManager:
             phone_tracks = [t for t in tracked if t.detection.label == PHONE_LABEL]
             is_present = bool(pose_landmarks)
 
-            events: list[Event] = [
+            return [
                 *posture_analyzer.update(pose_landmarks, session_id, timestamp),
                 *away_detector.update(is_present, session_id, timestamp),
                 *phone_engine.update(phone_tracks, hand_landmarks, session_id, timestamp),
@@ -127,25 +143,20 @@ class LiveSessionManager:
                     timestamp,
                 ),
             ]
-            for event in events:
-                event_queue.put_nowait(event)
 
-        async def drain_events() -> None:
+        async def process_frames() -> None:
             while True:
-                event = await event_queue.get()
-                await self._event_bus.publish(event)
+                frame = await frame_queue.get()
+                for event in await loop.run_in_executor(None, run_inference, frame):
+                    await self._event_bus.publish(event)
 
-        pipeline = VisionPipeline(camera, self._event_bus, frame_processors=[process_frame])
-        drain_task = asyncio.ensure_future(drain_events())
+        pipeline = VisionPipeline(camera, self._event_bus, frame_processors=[enqueue_frame])
+        process_task = asyncio.ensure_future(process_frames())
         try:
             await pipeline.run(session_id)
         finally:
-            # Flush anything still queued before tearing down so a stop()
-            # right after a frame finishes doesn't silently drop its events.
-            while not event_queue.empty():
-                await self._event_bus.publish(event_queue.get_nowait())
-            drain_task.cancel()
+            process_task.cancel()
             with suppress(asyncio.CancelledError):
-                await drain_task
+                await process_task
             for model in (pose_model, face_model, hand_model, object_model):
                 model.close()
