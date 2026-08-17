@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
-from attune.api.frame_overlay import draw_overlays, encode_jpeg
+from attune.api.frame_overlay import encode_jpeg
 from attune.behaviour.breaks.engine import AwayDetector
 from attune.behaviour.fatigue.engine import FatigueEngine
 from attune.behaviour.focus.engine import FocusEngine
@@ -16,6 +16,7 @@ from attune.behaviour.posture.engine import PostureAnalyzer
 from attune.core.events.schema import Event
 from attune.core.interfaces.bus import IEventBus
 from attune.core.value_objects.detection import Detection
+from attune.core.value_objects.geometry import Landmark
 from attune.vision.camera.opencv_camera import OpenCVCamera
 from attune.vision.camera.types import FrameArray
 from attune.vision.face.model import MediaPipeFaceModel
@@ -103,23 +104,30 @@ class LiveSessionManager:
             self._tasks.pop(session_id, None)
             self._latest_frames.pop(session_id, None)
 
+    def _load_models(
+        self,
+    ) -> tuple[MediaPipePoseModel, MediaPipeFaceModel, MediaPipeHandModel, YOLOObjectModel]:
+        # Loading four model files from disk is real blocking I/O+CPU work —
+        # run off the event loop so starting a session doesn't freeze the
+        # API (and therefore the dashboard). Constructed sequentially: an
+        # earlier version loaded all four concurrently across threads for a
+        # much faster startup, but MediaPipe/TFLite's native runtime isn't
+        # guaranteed safe for concurrent construction either, and that
+        # change landed in the same build where posture/phone detection
+        # broke — reverted along with the concurrent per-frame inference
+        # change for the same reason (see run_models below).
+        return (
+            MediaPipePoseModel(self._model_dir),
+            MediaPipeFaceModel(self._model_dir),
+            MediaPipeHandModel(self._model_dir),
+            YOLOObjectModel(self._model_dir, min_confidence=_PHONE_DETECTION_CONFIDENCE),
+        )
+
     async def _run_unsafe(self, session_id: UUID, camera_index: int) -> None:
         loop = asyncio.get_running_loop()
         camera = OpenCVCamera(device_index=camera_index, width=_CAMERA_WIDTH, height=_CAMERA_HEIGHT)
-        # Loading four model files from disk is real blocking I/O+CPU work —
-        # run off the event loop so starting a session doesn't freeze the API
-        # (and therefore the dashboard). Loading them concurrently rather than
-        # one after another measured ~14x faster (~2.1s -> ~0.15s) — most of
-        # each constructor's time is disk I/O and native init that overlaps
-        # well across threads, cutting the black-screen gap after "Start
-        # Session" from multiple seconds to barely noticeable.
-        pose_model, face_model, hand_model, object_model = await asyncio.gather(
-            loop.run_in_executor(None, MediaPipePoseModel, self._model_dir),
-            loop.run_in_executor(None, MediaPipeFaceModel, self._model_dir),
-            loop.run_in_executor(None, MediaPipeHandModel, self._model_dir),
-            loop.run_in_executor(
-                None, YOLOObjectModel, self._model_dir, "yolov8n.pt", _PHONE_DETECTION_CONFIDENCE
-            ),
+        pose_model, face_model, hand_model, object_model = await loop.run_in_executor(
+            None, self._load_models
         )
         tracker = IOUTracker()
         # Separate from `tracker` above: that one feeds PhoneInteractionEngine
@@ -155,32 +163,49 @@ class LiveSessionManager:
                     frame_queue.get_nowait()
             frame_queue.put_nowait(frame)
 
-        async def run_inference(frame: FrameArray) -> tuple[list[Event], bytes]:
-            # Dispatched to separate executor threads rather than called
-            # sequentially in one — pose/face/hand/YOLO are each themselves
-            # heavy native (TFLite/XNNPACK, PyTorch) calls that release the
-            # GIL during the actual computation, so real wall-clock overlap
-            # is possible on a multi-core CPU. Measured ~28% faster than
-            # calling all four back-to-back in a single thread.
+        def store_preview_frame(frame: FrameArray) -> None:
+            # Runs on every raw captured frame, ahead of the FPS governor
+            # that throttles inference — the preview should track the
+            # camera's real capture rate, not the much slower rate the four
+            # models can sustain. Plain camera feed, no overlays: what the
+            # models see stays an internal detail, not something drawn on
+            # screen. JPEG-encoding a frame is cheap (a few ms) so this runs
+            # inline rather than needing its own executor hop.
+            self._latest_frames[session_id] = encode_jpeg(frame)
+
+        def run_models(
+            frame: FrameArray, run_yolo: bool
+        ) -> tuple[list[Landmark], list[Landmark], list[Landmark], list[Detection] | None]:
+            # Called sequentially within a single executor thread. An
+            # earlier version dispatched pose/face/hand/YOLO to separate
+            # threads via asyncio.gather to run them concurrently — that
+            # measured faster in isolated benchmarks, but broke posture and
+            # phone detection in real use: MediaPipe/TFLite's native runtime
+            # isn't guaranteed safe for truly concurrent inference calls
+            # across model instances that share an internal thread pool, and
+            # landmark results came back wrong under real concurrent load in
+            # a way a quick timing benchmark didn't surface. Reverted to
+            # sequential; only the YOLO stride skip (below) still saves time.
+            pose_landmarks = pose_model.infer(frame)
+            face_landmarks = face_model.infer(frame)
+            hand_landmarks = hand_model.infer(frame)
+            detections = object_model.infer(frame) if run_yolo else None
+            return pose_landmarks, face_landmarks, hand_landmarks, detections
+
+        async def run_inference(frame: FrameArray) -> list[Event]:
             nonlocal processed_frame_count, last_detections
             timestamp = datetime.utcnow()
 
             processed_frame_count += 1
             run_yolo = processed_frame_count % _YOLO_FRAME_STRIDE == 0
-            # Submitted before the gather below so it starts executing
-            # immediately, in parallel with pose/face/hand, rather than
-            # waiting for them to finish first.
-            yolo_future = (
-                loop.run_in_executor(None, object_model.infer, frame) if run_yolo else None
-            )
-
-            pose_landmarks, face_landmarks, hand_landmarks = await asyncio.gather(
-                loop.run_in_executor(None, pose_model.infer, frame),
-                loop.run_in_executor(None, face_model.infer, frame),
-                loop.run_in_executor(None, hand_model.infer, frame),
-            )
-            if yolo_future is not None:
-                last_detections = await yolo_future
+            (
+                pose_landmarks,
+                face_landmarks,
+                hand_landmarks,
+                yolo_result,
+            ) = await loop.run_in_executor(None, run_models, frame, run_yolo)
+            if yolo_result is not None:
+                last_detections = yolo_result
             detections = last_detections
 
             tracked = tracker.update(detections)
@@ -205,24 +230,20 @@ class LiveSessionManager:
             if presence_event is not None:
                 events.append(presence_event)
 
-            annotated = draw_overlays(
-                frame,
-                pose_landmarks=pose_landmarks,
-                face_landmarks=face_landmarks,
-                hand_landmarks=hand_landmarks,
-                phone_tracks=phone_tracks,
-            )
-            return events, encode_jpeg(annotated)
+            return events
 
         async def process_frames() -> None:
             while True:
                 frame = await frame_queue.get()
-                events, jpeg = await run_inference(frame)
-                self._latest_frames[session_id] = jpeg
-                for event in events:
+                for event in await run_inference(frame):
                     await self._event_bus.publish(event)
 
-        pipeline = VisionPipeline(camera, self._event_bus, frame_processors=[enqueue_frame])
+        pipeline = VisionPipeline(
+            camera,
+            self._event_bus,
+            frame_processors=[enqueue_frame],
+            raw_frame_processors=[store_preview_frame],
+        )
         process_task = asyncio.ensure_future(process_frames())
         try:
             await pipeline.run(session_id)

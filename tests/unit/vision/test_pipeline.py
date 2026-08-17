@@ -154,6 +154,27 @@ async def test_pipeline_governor_throttles_processing() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pipeline_raw_frame_processors_bypass_the_fps_governor() -> None:
+    camera = MockCamera(frame_count=5)
+    bus = EventBus()
+    raw_seen: list[FrameArray] = []
+    governed_seen: list[FrameArray] = []
+
+    pipeline = VisionPipeline(
+        camera,
+        bus,
+        fps_governor=FPSGovernor(target_fps=0.001),
+        frame_processors=[governed_seen.append],
+        raw_frame_processors=[raw_seen.append],
+    )
+
+    await pipeline.run(session_id=uuid4())
+
+    assert len(raw_seen) == 5  # every captured frame, ungated
+    assert len(governed_seen) == 1  # same throttling as test_pipeline_governor_throttles_processing
+
+
+@pytest.mark.asyncio
 async def test_pipeline_reconnects_and_resumes_after_a_transient_disconnect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

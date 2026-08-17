@@ -35,6 +35,7 @@ class VisionPipeline:
         preprocessor: Preprocessor | None = None,
         fps_governor: FPSGovernor | None = None,
         frame_processors: Sequence[FrameProcessor] = (),
+        raw_frame_processors: Sequence[FrameProcessor] = (),
         source_module: str = "vision.pipeline",
     ) -> None:
         self._camera = camera
@@ -42,6 +43,11 @@ class VisionPipeline:
         self._preprocessor = preprocessor or Preprocessor()
         self._fps_governor = fps_governor or FPSGovernor(target_fps=8)
         self._frame_processors = list(frame_processors)
+        # Unlike frame_processors, these run on every captured frame ahead of
+        # the FPS governor gate — for consumers like a live preview that want
+        # to track the camera's real capture rate rather than the (much
+        # lower) rate inference can sustain.
+        self._raw_frame_processors = list(raw_frame_processors)
         self._source_module = source_module
         self._processed_frame_count = 0
 
@@ -72,6 +78,9 @@ class VisionPipeline:
 
     async def _process_frame_stream(self) -> None:
         async for captured in self._camera.frames():
+            for raw_processor in self._raw_frame_processors:
+                raw_processor(captured.image)
+
             now = time.monotonic()
             if not self._fps_governor.should_process(now):
                 continue
